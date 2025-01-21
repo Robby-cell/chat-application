@@ -1,0 +1,2 @@
+add_subdirectory(encryption)
+add_subdirectory(generate_key)

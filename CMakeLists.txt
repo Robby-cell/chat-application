@@ -3,5 +3,6 @@ project(mypkg CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+add_subdirectory(shared)
 add_subdirectory(client)
 add_subdirectory(server)

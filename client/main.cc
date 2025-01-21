@@ -146,7 +146,6 @@ auto main(int argc, char **argv) -> int {
     }
   }
 
-  while (stop_source.request_stop()) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  }
+  stop_source.request_stop();
+  receive_thread.join();
 }
