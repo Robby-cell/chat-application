@@ -1,9 +1,11 @@
 #ifndef SHARED_GENERATE_KEY_HH
 #define SHARED_GENERATE_KEY_HH
 
+#include <array>
 #include <openssl/rand.h>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace key {
@@ -11,6 +13,13 @@ namespace key {
 struct key_exception : public std::runtime_error {
   using std::runtime_error::runtime_error;
 };
+
+struct key_iv {
+  std::array<unsigned char, 32UZ> key;
+  std::array<unsigned char, 16UZ> iv;
+};
+
+extern "C++" auto generate_key_iv() -> key_iv;
 
 extern "C++" auto generate_dh_key() -> EVP_PKEY *;
 

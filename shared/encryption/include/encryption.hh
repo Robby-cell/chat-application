@@ -1,8 +1,7 @@
 #ifndef SHARED_ENCRYPTION_HH
 #define SHARED_ENCRYPTION_HH
 
-#include <openssl/evp.h>
-
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -13,14 +12,14 @@ struct encryption_exception : std::runtime_error {
   using std::runtime_error::runtime_error;
 };
 
-extern "C++" auto aes_encrypt(const std::vector<unsigned char> &key,
-                              const std::vector<unsigned char> &iv,
-                              const std::string &plaintext)
+extern "C++" auto aes_encrypt(std::span<const unsigned char, 32UZ> key,
+                              std::span<const unsigned char, 16UZ> iv,
+                              std::string_view plaintext)
     -> std::vector<unsigned char>;
 
-extern "C++" auto aes_decrypt(const std::vector<unsigned char> &key,
-                              const std::vector<unsigned char> &iv,
-                              const std::vector<unsigned char> &ciphertext)
+extern "C++" auto aes_decrypt(std::span<const unsigned char, 32UZ> key,
+                              std::span<const unsigned char, 16UZ> &iv,
+                              std::span<const unsigned char> ciphertext)
     -> std::string;
 
 } // namespace encryption

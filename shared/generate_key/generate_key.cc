@@ -18,6 +18,17 @@ unique_ptr(T *, const Deleter &) -> unique_ptr<T, Deleter>;
 
 namespace key {
 
+extern "C++" auto generate_key_iv() -> key_iv {
+  key_iv keys;
+
+  if (1 != RAND_bytes(keys.key.data(), keys.key.size()) ||
+      1 != RAND_bytes(keys.iv.data(), keys.iv.size())) {
+    throw key_exception("Failed to generate random bytes");
+  }
+
+  return keys;
+}
+
 extern "C++" auto generate_dh_key() -> EVP_PKEY * {
   DH *dh_params = DH_new();
   if (!dh_params) {

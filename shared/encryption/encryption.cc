@@ -1,16 +1,25 @@
 #include "encryption.hh"
-#include <memory>
+
+#include <openssl/aes.h>
 #include <openssl/evp.h>
+
+#include <memory>
+#include <span>
+#include <string>
+#include <string_view>
 
 namespace encryption {
 
-extern "C++" auto aes_encrypt(const std::vector<unsigned char> &key,
-                              const std::vector<unsigned char> &iv,
-                              const std::string &plaintext)
+extern "C++" auto aes_encrypt(std::span<const unsigned char, 32UZ> key,
+                              std::span<const unsigned char, 16UZ> iv,
+                              std::string_view plaintext)
     -> std::vector<unsigned char> {
-  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  std::vector<unsigned char> ciphertext(plaintext.length() + AES_BLOCK_SIZE);
+
+  // Create AES context
+  auto ctx = EVP_CIPHER_CTX_new();
   if (!ctx) {
-    throw encryption_exception("Failed to create EVP_CIPHER_CTX");
+    throw encryption_exception("Failed to create AES context");
   }
   auto _evp_cipher_ctx_raii =
       std::unique_ptr<EVP_CIPHER_CTX, decltype([](auto ctx) {
@@ -18,71 +27,70 @@ extern "C++" auto aes_encrypt(const std::vector<unsigned char> &key,
                       })>(ctx);
 
   // Initialize encryption
-  if (EVP_EncryptInit_ex(ctx, EVP_aes_128_cfb(), nullptr, key.data(),
-                         iv.data()) != 1) {
-    throw encryption_exception("Failed to initialize AES encryption");
+  if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key.data(),
+                              iv.data())) {
+    throw encryption_exception("Failed to initialize encryption");
   }
 
-  // Encrypt the plaintext
-  std::vector<unsigned char> ciphertext(
-      plaintext.size() + EVP_CIPHER_block_size(EVP_aes_128_cfb()));
-  int len = 0, ciphertext_len = 0;
-
-  if (EVP_EncryptUpdate(
-          ctx, ciphertext.data(), &len,
-          reinterpret_cast<const unsigned char *>(plaintext.data()),
-          plaintext.size()) != 1) {
-    throw encryption_exception("Failed to encrypt data");
+  // Perform encryption
+  int len = 0;
+  if (1 != EVP_EncryptUpdate(
+               ctx, ciphertext.data(), &len,
+               reinterpret_cast<const unsigned char *>(plaintext.data()),
+               plaintext.length())) {
+    throw encryption_exception("Encryption failed");
   }
-  ciphertext_len = len;
 
-  // Finalize encryption (for CFB, this may not add additional data)
-  if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-    throw encryption_exception("Failed to finalize encryption");
+  // Finalize encryption
+  int final_len = 0;
+  if (1 != EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &final_len)) {
+    throw encryption_exception("Encryption finalization failed");
   }
-  ciphertext_len += len;
 
-  ciphertext.resize(ciphertext_len);
+  ciphertext.resize(len + final_len);
   return ciphertext;
 }
 
-extern "C++" auto aes_decrypt(const std::vector<unsigned char> &key,
-                              const std::vector<unsigned char> &iv,
-                              const std::vector<unsigned char> &ciphertext)
+extern "C++" auto aes_decrypt(std::span<const unsigned char, 32UZ> key,
+                              std::span<const unsigned char, 16UZ> &iv,
+                              std::span<const unsigned char> ciphertext)
     -> std::string {
-  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  std::vector<unsigned char> plaintext(ciphertext.size());
+
+  // Create AES context
+  auto ctx = EVP_CIPHER_CTX_new();
   if (!ctx) {
-    throw encryption_exception("Failed to create EVP_CIPHER_CTX");
+    throw encryption_exception("Failed to create AES context");
   }
+  auto _evp_cipher_ctx_raii =
+      std::unique_ptr<EVP_CIPHER_CTX, decltype([](auto ctx) {
+                        EVP_CIPHER_CTX_free(ctx);
+                      })>(ctx);
 
   // Initialize decryption
-  if (EVP_DecryptInit_ex(ctx, EVP_aes_128_cfb(), nullptr, key.data(),
-                         iv.data()) != 1) {
-    EVP_CIPHER_CTX_free(ctx);
-    throw encryption_exception("Failed to initialize AES decryption");
+  if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key.data(),
+                              iv.data())) {
+    throw encryption_exception("Failed to initialize decryption");
   }
 
-  // Decrypt the ciphertext
-  std::vector<unsigned char> plaintext(ciphertext.size());
-  int len = 0, plaintext_len = 0;
-
-  if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(),
-                        ciphertext.size()) != 1) {
-    EVP_CIPHER_CTX_free(ctx);
-    throw encryption_exception("Failed to decrypt data");
+  // Perform decryption
+  int len = 0;
+  if (1 != EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(),
+                             ciphertext.size())) {
+    throw encryption_exception("Decryption failed");
   }
-  plaintext_len = len;
 
-  // Finalize decryption (for CFB, this may not add additional data)
-  if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
-    EVP_CIPHER_CTX_free(ctx);
-    throw encryption_exception("Failed to finalize decryption");
+  // Finalize decryption
+  int final_len = 0;
+  if (1 != EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &final_len)) {
+    throw encryption_exception("Decryption finalization failed");
   }
-  plaintext_len += len;
 
-  plaintext.resize(plaintext_len);
-  EVP_CIPHER_CTX_free(ctx);
-  return std::string(plaintext.begin(), plaintext.end());
+  // Resize the plaintext vector to remove padding bytes
+  plaintext.resize(len + final_len);
+
+  return std::string(reinterpret_cast<const char *>(plaintext.data()),
+                     plaintext.size());
 }
 
 } // namespace encryption
