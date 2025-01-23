@@ -5,6 +5,7 @@
 #include <openssl/rand.h>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -28,7 +29,7 @@ extern "C++" auto derive_shared_secret(EVP_PKEY *local_key, EVP_PKEY *peer_key)
 
 extern "C++" auto export_public_key(EVP_PKEY *key) -> std::string;
 
-extern "C++" auto import_public_key(const std::string &pem_str) -> EVP_PKEY *;
+extern "C++" auto import_public_key(std::string_view pem_str) -> EVP_PKEY *;
 
 } // namespace key
 

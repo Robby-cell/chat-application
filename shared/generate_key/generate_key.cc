@@ -10,6 +10,7 @@
 #include <openssl/rand.h>
 
 #include <memory>
+#include <string_view>
 
 namespace std {
 template <class T, class Deleter>
@@ -99,7 +100,7 @@ extern "C++" auto export_public_key(EVP_PKEY *key) -> std::string {
   return pem_str;
 }
 
-extern "C++" auto import_public_key(const std::string &pem_str) -> EVP_PKEY * {
+extern "C++" auto import_public_key(std::string_view pem_str) -> EVP_PKEY * {
   BIO *bio = BIO_new_mem_buf(pem_str.data(), pem_str.size());
   EVP_PKEY *key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
   BIO_free(bio);
