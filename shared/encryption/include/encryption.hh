@@ -18,7 +18,7 @@ extern "C++" auto aes_encrypt(std::span<const unsigned char, 32UZ> key,
     -> std::vector<unsigned char>;
 
 extern "C++" auto aes_decrypt(std::span<const unsigned char, 32UZ> key,
-                              std::span<const unsigned char, 16UZ> &iv,
+                              std::span<const unsigned char, 16UZ> iv,
                               std::span<const unsigned char> ciphertext)
     -> std::string;
 

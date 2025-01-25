@@ -6,7 +6,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace key {
@@ -20,6 +19,11 @@ struct key_iv {
   std::array<unsigned char, 16UZ> iv;
 };
 
+struct rsa_key_pair {
+  std::string public_key;
+  std::string private_key;
+};
+
 extern "C++" auto generate_key_iv() -> key_iv;
 
 extern "C++" auto generate_dh_key() -> EVP_PKEY *;
@@ -30,6 +34,8 @@ extern "C++" auto derive_shared_secret(EVP_PKEY *local_key, EVP_PKEY *peer_key)
 extern "C++" auto export_public_key(EVP_PKEY *key) -> std::string;
 
 extern "C++" auto import_public_key(std::string_view pem_str) -> EVP_PKEY *;
+
+extern "C++" auto generate_rsa_key_pair(int key_size_bits) -> rsa_key_pair;
 
 } // namespace key
 

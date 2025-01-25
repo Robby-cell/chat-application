@@ -1,5 +1,7 @@
 #include "generate_key.hh"
 
+#include <cstddef>
+#include <cstdio>
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/core_names.h>
@@ -10,6 +12,7 @@
 #include <openssl/rand.h>
 
 #include <memory>
+#include <openssl/rsa.h>
 #include <string_view>
 
 namespace std {
@@ -105,6 +108,58 @@ extern "C++" auto import_public_key(std::string_view pem_str) -> EVP_PKEY * {
   EVP_PKEY *key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
   BIO_free(bio);
   return key;
+}
+
+extern "C++" auto generate_rsa_key_pair(int key_size_bits) -> rsa_key_pair {
+  auto ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+  if (!ctx) {
+    throw key_exception("Failed to create EVP_PKEY_CTX");
+  }
+  auto _evp_pkey_ctx_raii =
+      std::unique_ptr<EVP_PKEY_CTX,
+                      decltype([](auto ctx) { EVP_PKEY_CTX_free(ctx); })>(ctx);
+
+  if (EVP_PKEY_keygen_init(ctx) <= 0) {
+    throw key_exception("Failed to initialize key generation");
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, key_size_bits) <= 0) {
+    throw key_exception("Failed to set key size");
+  }
+
+  EVP_PKEY *key;
+  if (EVP_PKEY_keygen(ctx, &key) <= 0) {
+    throw key_exception("Failed to generate RSA key pair");
+  }
+  auto _evp_pkey_raii =
+      std::unique_ptr<EVP_PKEY, decltype([](auto key) { EVP_PKEY_free(key); })>(
+          key);
+
+  rsa_key_pair keys;
+  keys.private_key.resize(key_size_bits / 8);
+  keys.public_key.resize(key_size_bits / 8);
+
+  auto mem_to_mapping_for_write = [](void *mem, std::size_t length) {
+    return fmemopen(mem, length, "w+");
+  };
+
+  auto pub_key =
+      mem_to_mapping_for_write(keys.public_key.data(), keys.public_key.size());
+  if (!pub_key) {
+    throw key_exception("Failed to open mem mapping for public key write");
+  }
+  PEM_write_PUBKEY(pub_key, key);
+  fclose(pub_key);
+
+  auto priv_key = mem_to_mapping_for_write(keys.private_key.data(),
+                                           keys.private_key.size());
+  if (!priv_key) {
+    throw key_exception("Failed to open mem mapping for private key write");
+  }
+  PEM_write_PrivateKey(priv_key, key, nullptr, nullptr, 0, nullptr, nullptr);
+  fclose(priv_key);
+
+  return keys;
 }
 
 } // namespace key
