@@ -1,7 +1,9 @@
 #include "encryption.hh"
 
 #include <openssl/aes.h>
+#include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 
 #include <memory>
 #include <span>
@@ -91,6 +93,97 @@ extern "C++" auto aes_decrypt(std::span<const unsigned char, 32UZ> key,
 
   return std::string(reinterpret_cast<const char *>(plaintext.data()),
                      plaintext.size());
+}
+
+extern "C++" auto rsa_encrypt(std::string_view data,
+                              std::span<const unsigned char> pub_key_view)
+    -> std::vector<unsigned char> {
+  BIO *bio = BIO_new_mem_buf(pub_key_view.data(), pub_key_view.size());
+  EVP_PKEY *pub_key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
+  if (!pub_key) {
+    throw encryption_exception("Failed to read public key");
+  }
+  BIO_free(bio);
+
+  EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pub_key, nullptr);
+  if (!ctx) {
+    throw encryption_exception("Failed to create EVP_PKEY_CTX for encryption");
+  }
+
+  if (EVP_PKEY_encrypt_init(ctx) <= 0) {
+    throw encryption_exception("Failed to initialize encryption operation");
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0) {
+    throw encryption_exception("Failed to set RSA_PKCS1_PADDING");
+  }
+
+  size_t required_len;
+  if (EVP_PKEY_encrypt(ctx, nullptr, &required_len,
+                       reinterpret_cast<const unsigned char *>(data.data()),
+                       data.size()) <= 0) {
+    throw encryption_exception(
+        "Failed to determine required buffer size for encryption");
+  }
+
+  std::vector<unsigned char> encrypted_data(required_len);
+  size_t outlen = required_len;
+
+  if (EVP_PKEY_encrypt(ctx, encrypted_data.data(), &outlen,
+                       reinterpret_cast<const unsigned char *>(data.data()),
+                       data.size()) <= 0) {
+    throw encryption_exception("RSA encryption failed");
+  }
+
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_free(pub_key);
+
+  return encrypted_data;
+}
+
+extern "C++" auto rsa_decrypt(std::span<unsigned char> encrypted_data,
+                              std::span<const unsigned char> priv_key_view)
+    -> std::string {
+  BIO *bio = BIO_new_mem_buf(priv_key_view.data(), priv_key_view.size());
+  EVP_PKEY *priv_key = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+  if (!priv_key) {
+    throw encryption_exception("Failed to read private key");
+  }
+  BIO_free(bio);
+
+  EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(priv_key, nullptr);
+  if (!ctx) {
+    throw encryption_exception("Failed to create EVP_PKEY_CTX for decryption");
+  }
+
+  if (EVP_PKEY_decrypt_init(ctx) <= 0) {
+    throw encryption_exception("Failed to initialize decryption operation");
+  }
+
+  if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0) {
+    throw encryption_exception("Failed to set RSA_PKCS1_PADDING");
+  }
+
+  size_t required_len;
+  if (EVP_PKEY_decrypt(ctx, nullptr, &required_len, encrypted_data.data(),
+                       encrypted_data.size()) <= 0) {
+    throw encryption_exception(
+        "Failed to determine required buffer size for decryption");
+  }
+
+  std::vector<unsigned char> decrypted_data(required_len);
+  size_t outlen = required_len;
+
+  if (EVP_PKEY_decrypt(ctx, decrypted_data.data(), &outlen,
+                       encrypted_data.data(), encrypted_data.size()) <= 0) {
+    throw encryption_exception("RSA decryption failed");
+  }
+
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_free(priv_key);
+
+  return std::string(reinterpret_cast<const char *>(decrypted_data.data()),
+                     outlen);
 }
 
 } // namespace encryption

@@ -4,6 +4,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace encryption {
@@ -20,6 +21,14 @@ extern "C++" auto aes_encrypt(std::span<const unsigned char, 32UZ> key,
 extern "C++" auto aes_decrypt(std::span<const unsigned char, 32UZ> key,
                               std::span<const unsigned char, 16UZ> iv,
                               std::span<const unsigned char> ciphertext)
+    -> std::string;
+
+extern "C++" auto rsa_encrypt(std::string_view data,
+                              std::span<const unsigned char> pub_key_view)
+    -> std::vector<unsigned char>;
+
+extern "C++" auto rsa_decrypt(std::span<unsigned char> encrypted_data,
+                              std::span<const unsigned char> priv_key_view)
     -> std::string;
 
 } // namespace encryption

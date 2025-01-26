@@ -1,5 +1,6 @@
 #include <argparse/argparse.hpp>
 #include <enet/enet.h>
+#include <openssl/evp.h>
 
 #include <cstdint>
 #include <exception>
@@ -11,6 +12,9 @@
 #include <string>
 #include <string_view>
 #include <thread>
+
+#include "encryption.hh"
+#include "generate_key.hh"
 
 static std::mutex mutex;
 
@@ -45,6 +49,8 @@ auto main(int argc, char **argv) -> int try {
   using std::operator""sv;
   static constexpr auto port_flag = "--port"sv;
   static constexpr auto host_flag = "--host"sv;
+
+  OpenSSL_add_all_algorithms();
 
   if (enet_initialize() != 0) {
     std::cerr << "Failed to initialize enet\n";
