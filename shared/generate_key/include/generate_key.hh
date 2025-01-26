@@ -20,8 +20,8 @@ struct key_iv {
 };
 
 struct rsa_key_pair {
-  std::string public_key;
-  std::string private_key;
+  std::vector<unsigned char> public_key;
+  std::vector<unsigned char> private_key;
 };
 
 extern "C++" auto generate_key_iv() -> key_iv;

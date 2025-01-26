@@ -1,5 +1,4 @@
 #include <argparse/argparse.hpp>
-#include <chrono>
 #include <enet/enet.h>
 
 #include <cstdint>
@@ -42,7 +41,7 @@ void receive_messages(ENetPeer *peer, std::stop_token stop_token) {
   }
 }
 
-auto main(int argc, char **argv) -> int {
+auto main(int argc, char **argv) -> int try {
   using std::operator""sv;
   static constexpr auto port_flag = "--port"sv;
   static constexpr auto host_flag = "--host"sv;
@@ -148,4 +147,6 @@ auto main(int argc, char **argv) -> int {
 
   stop_source.request_stop();
   receive_thread.join();
+} catch (const std::exception &e) {
+  std::cerr << e.what() << std::endl;
 }

@@ -1,7 +1,5 @@
 #include "generate_key.hh"
 
-#include <cstddef>
-#include <cstdio>
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/core_names.h>
@@ -10,9 +8,14 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
-
-#include <memory>
 #include <openssl/rsa.h>
+
+#include <cstddef>
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <memory>
 #include <string_view>
 
 namespace std {
@@ -111,6 +114,12 @@ extern "C++" auto import_public_key(std::string_view pem_str) -> EVP_PKEY * {
 }
 
 extern "C++" auto generate_rsa_key_pair(int key_size_bits) -> rsa_key_pair {
+  namespace fs = std::filesystem;
+
+  const auto tmp_dir = fs::temp_directory_path();
+  const auto pub_key_filename = tmp_dir / "public_key.pem";
+  const auto priv_key_filename = tmp_dir / "private_key.pem";
+
   auto ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
   if (!ctx) {
     throw key_exception("Failed to create EVP_PKEY_CTX");
@@ -127,7 +136,7 @@ extern "C++" auto generate_rsa_key_pair(int key_size_bits) -> rsa_key_pair {
     throw key_exception("Failed to set key size");
   }
 
-  EVP_PKEY *key;
+  EVP_PKEY *key = nullptr;
   if (EVP_PKEY_keygen(ctx, &key) <= 0) {
     throw key_exception("Failed to generate RSA key pair");
   }
@@ -135,31 +144,36 @@ extern "C++" auto generate_rsa_key_pair(int key_size_bits) -> rsa_key_pair {
       std::unique_ptr<EVP_PKEY, decltype([](auto key) { EVP_PKEY_free(key); })>(
           key);
 
-  rsa_key_pair keys;
-  keys.private_key.resize(key_size_bits / 8);
-  keys.public_key.resize(key_size_bits / 8);
+  auto open_file = [](auto &&filename) { return fopen(filename, "w+"); };
 
-  auto mem_to_mapping_for_write = [](void *mem, std::size_t length) {
-    return fmemopen(mem, length, "w+");
-  };
-
-  auto pub_key =
-      mem_to_mapping_for_write(keys.public_key.data(), keys.public_key.size());
+  auto pub_key = open_file(pub_key_filename.c_str());
   if (!pub_key) {
     throw key_exception("Failed to open mem mapping for public key write");
   }
   PEM_write_PUBKEY(pub_key, key);
   fclose(pub_key);
 
-  auto priv_key = mem_to_mapping_for_write(keys.private_key.data(),
-                                           keys.private_key.size());
+  auto priv_key = open_file(priv_key_filename.c_str());
   if (!priv_key) {
     throw key_exception("Failed to open mem mapping for private key write");
   }
   PEM_write_PrivateKey(priv_key, key, nullptr, nullptr, 0, nullptr, nullptr);
   fclose(priv_key);
 
-  return keys;
+  const auto read_file = [](auto &&filename) {
+    std::ifstream fs{filename};
+    return std::vector(std::istream_iterator<unsigned char>(fs), {});
+  };
+
+  rsa_key_pair ret{
+      .public_key = read_file(pub_key_filename),
+      .private_key = read_file(priv_key_filename),
+  };
+
+  fs::remove(pub_key_filename);
+  fs::remove(priv_key_filename);
+
+  return ret;
 }
 
 } // namespace key
